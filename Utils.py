@@ -191,7 +191,7 @@ def update(recon, image, mask, name='update'):
 		m_real = mask[:,0:1,...]
 		m_imag = mask[:,0:1,...]
 		m_mask = tf.concat([m_real, m_imag], axis=1)
-		print mask, k_recon, k_image
+		print(mask, k_recon, k_image)
 		condition = tf.cast(tf.real(m_mask)>0.9, tf.bool)
 		# where(
 		#     condition,
@@ -337,7 +337,7 @@ class ImageDataFlow(RNGDataFlow):
 
 	def reset_state(self):
 		self.rng = get_rng(self)   
-		print self.is_training
+		print(self.is_training)
 
 
 	def random_flip(self, image, seed=None):

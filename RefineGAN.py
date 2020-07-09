@@ -263,9 +263,9 @@ class Model(GANModelDesc):
 		viz_B_recon, vis_B_recon = viz3('B_recon', [R, S02, M2, S2, T2, tf.abs(S02-M2), tf.abs(S02-S2), tf.abs(S02-T2), Sn2, Sp2, Tn2, Tp2])
 		
 
-		print S01, R, Rh
-		print viz_A_recon, vis_A_recon
-		print M1, S1, T1
+		print(S01, R, Rh)
+		print(viz_A_recon, vis_A_recon)
+		print(M1, S1, T1)
 	def _get_optimizer(self):
 		lr = symbolic_functions.get_scalar_var('learning_rate', 1e-4, summary=True)
 		return tf.train.AdamOptimizer(lr, beta1=0.5, epsilon=1e-3)
@@ -276,7 +276,7 @@ class Model(GANModelDesc):
 ###############################################################################	
 def sample(imageDir, maskDir, labelDir, model_path, resultDir):
 	# TODO
-	print sys.argv[0]
+	print(sys.argv[0])
 	pred_config = PredictConfig(
 		session_init=SaverRestore(model_path), #session_init=SaverRestore(args.load)
 		model=Model(),
@@ -290,8 +290,8 @@ def sample(imageDir, maskDir, labelDir, model_path, resultDir):
 	filenames = glob.glob(imageDir + '/*.*')
 	from natsort import natsorted
 	filenames = natsorted(filenames)
-	print filenames
-	print resultDir
+	print(filenames)
+	print(resultDir)
 
 	import shutil
 	shutil.rmtree(resultDir, ignore_errors=True)
@@ -314,9 +314,9 @@ def sample(imageDir, maskDir, labelDir, model_path, resultDir):
 	pred = SimpleDatasetPredictor(pred_config, ds_valid)
 	
 	for idx, o in enumerate(pred.get_result()):
-		print pred
-		print len(o)
-		print o[0].shape
+		print(pred)
+		print(len(o))
+		print(o[0].shape)
 
 		outA = o[0][:, :, :, :] 
 
@@ -324,9 +324,9 @@ def sample(imageDir, maskDir, labelDir, model_path, resultDir):
 		colors0 = np.array(outA) #.astype(np.uint8)
 		head, tail = os.path.split(filenames[idx])
 		tail = tail.replace('png', 'tif')
-		print tail
-		print colors0.shape
-		print colors0.dtype
+		print(tail)
+		print(colors0.shape)
+		print(colors0.dtype)
 		import skimage.io
 	
 		skimage.io.imsave(resultDir+ "/full_"+tail, np.squeeze(colors0[...,256*1:256*2])) # Zerofill
