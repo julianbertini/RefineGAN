@@ -82,7 +82,7 @@ class Model(GANModelDesc):
 				argscope([Conv2D, Deconv2D, BatchNorm], data_format='NCHW'), \
 				argscope(LeakyReLU, alpha=0.2):
 			with tf.name_scope('preprocessing'):
-			  image  = tf.identity(A, name='S01') # For PSNR
+				image  = tf.identity(A, name='S01') # For PSNR
 				label  = tf.identity(B, name='S02') # For PSNR
 			
 					
@@ -93,18 +93,10 @@ class Model(GANModelDesc):
 			filtered_image1 = image - filter1
 			updated_image1  = update(filtered_image1, label, R, name='S1')
 			
-			with tf.variable_scope('gen'):
-				with tf.variable_scope('boost'):
-					filter2  = self.generator(updated_image1)
-
-			filtered_image2  = updated_image1 + filter2
-			updated_image2   = update(filtered_image2, label, R, name='T1')
-
 			
 			with tf.variable_scope('discrim'):
 				S1_dis_real = self.discriminator(label)
 				S1_dis_fake = self.discriminator(updated_image1)
-				T1_dis_fake = self.discriminator(updated_image2)
 				
 
 		with tf.name_scope('losses'):
@@ -113,22 +105,24 @@ class Model(GANModelDesc):
 
 				with tf.name_scope('Recon'):
 					smoothness_AA = tf.reduce_mean(tf.image.total_variation((updated_image1)), name='smoothness_AA')
-				with tf.name_scope('Boost'):
-					smoothness_Aa = tf.reduce_mean(tf.image.total_variation((updated_image2)), name='smoothness_Aa')
+					background_diff_AA = background_diff(updated_image1, label, name='background_diff_AA')
+					signal_diff_AA = signal_diff(updated_image1, label, name='signal_diff_AA')
 				
 			with tf.name_scope('LossAA'):
 				G_loss_AA, D_loss_AA = self.build_losses(S1_dis_real, S1_dis_fake, name='AA')
-				G_loss_Aa, D_loss_Aa = self.build_losses(S1_dis_real, T1_dis_fake, name='Aa')
 		
 						
 		DELTA = 1e-4
+		ALPHA = 1e+1
 		RATES = tf.count_nonzero(tf.ones_like(R), dtype=tf.float32) / 2 / tf.count_nonzero(R, dtype=tf.float32) 
 		self.g_loss = tf.add_n([
-								(G_loss_AA + G_loss_Aa),
-								(smoothness_AA + smoothness_BB + smoothness_Aa + smoothness_Bb) * DELTA, 
+								(G_loss_AA),
+								(smoothness_AA) * DELTA, 
+								(background_diff_AA) * ALPHA * RATES,
+								(signal_diff_AA) * ALPHA * RATES
 								], name='G_loss_total')
 		self.d_loss = tf.add_n([
-								(D_loss_AA 	+ D_loss_Aa), 
+								(D_loss_AA), 
 								], name='D_loss_total')
 
 		wd_g = regularize_cost('gen/.*/W', 		l1_regularizer(1e-5), name='G_regularize')
@@ -143,12 +137,11 @@ class Model(GANModelDesc):
 
 		add_moving_summary(self.d_loss, self.g_loss)
 		add_moving_summary(
-			smoothness_AA, 
-			smoothness_Aa 
+			smoothness_AA,
+			background_diff_AA
 			)
 
-		psnr(tf_complex(cvt2imag(S1)), tf_complex(cvt2imag(S02)), maxp=255, name='PSNR_recon')
-		psnr(tf_complex(cvt2imag(T1)), tf_complex(cvt2imag(S02)), maxp=255, name='PSNR_boost')
+		psnr(tf_complex(cvt2imag(updated_image1)), tf_complex(cvt2imag(label)), maxp=255, name='PSNR_recon')
 
 
 		def viz3(name, listTensor):
@@ -163,13 +156,13 @@ class Model(GANModelDesc):
 				
 			return tf.identity(out, name='viz_'+name), tf.identity(img, name='vis_'+name)
 
-		viz_A_recon, vis_A_recon = viz3('A_recon', [R, S01, M1, S1, T1, tf.abs(S01-M1), tf.abs(S01-S1), tf.abs(S01-T1), Sn1, Sp1, Tn1, Tp1])
-		viz_B_recon, vis_B_recon = viz3('B_recon', [R, S02, M2, S2, T2, tf.abs(S02-M2), tf.abs(S02-S2), tf.abs(S02-T2), Sn2, Sp2, Tn2, Tp2])
+		viz_A_recon, vis_A_recon = viz3('A_recon', [R, image, label, updated_image1])
+		#viz_B_recon, vis_B_recon = viz3('B_recon', [R, label, M2, S2, T2, tf.abs(S02-M2), tf.abs(S02-S2), tf.abs(S02-T2), Sn2, Sp2, Tn2, Tp2])
 		
 
-		print(S01, R, Rh)
-		print(viz_A_recon, vis_A_recon)
-		print(M1, S1, T1)
+		#print(S01, R, Rh)
+		#print(viz_A_recon, vis_A_recon)
+		#print(M1, S1, T1)
 	def _get_optimizer(self):
 		lr = symbolic_functions.get_scalar_var('learning_rate', 1e-4, summary=True)
 		return tf.train.AdamOptimizer(lr, beta1=0.5, epsilon=1e-3)
@@ -178,7 +171,7 @@ class Model(GANModelDesc):
 
 
 ###############################################################################	
-def sample(imageDir, maskDir, labelDir, model_path, resultDir):
+def sample(imageDir, maskDir, labelDir, model_path, resultDir, size):
 	# TODO
 	print(sys.argv[0])
 	pred_config = PredictConfig(
@@ -188,7 +181,7 @@ def sample(imageDir, maskDir, labelDir, model_path, resultDir):
 		output_names=['vis_A_recon'])
 
 
-	ds_valid = ImageDataFlow(imageDir, maskDir, labelDir, 100, is_training=False)
+	ds_valid = ImageDataFlow(imageDir, maskDir, labelDir, size, is_training=False)
 	# ds_valid = PrefetchDataZMQ(ds_valid, nr_proc=8)
 	
 	filenames = glob.glob(imageDir + '/*.*')
@@ -277,30 +270,24 @@ class VisualizeRunner(Callback):
 
 ###############################################################################		
 # if __name__ == '__main__':
-def main():
+def main(input_args):
+	global args
+	args = input_args
 	np.random.seed(2018)
 	tf.set_random_seed(2018)
+	len_images = len(glob.glob(args.imageDir + '/*.*'))
+	len_labels = len(glob.glob(args.labelDir + '/*.*'))
+	assert len_images == len_labels
 	#https://docs.python.org/3/library/argparse.html
-	parser = argparse.ArgumentParser()
 	#
-	parser.add_argument('--gpu',        help='comma separated list of GPU(s) to use.')
-	parser.add_argument('--load',       help='load models for continue train or predict')
-	parser.add_argument('--sample',     help='run sampling one instance')
-	parser.add_argument('--imageDir',   help='Image directory', required=True)
-	parser.add_argument('--maskDir',    help='Masks directory', required=False)
-	parser.add_argument('--labelDir',   help='Label directory', required=True)
-	parser.add_argument('-db', '--debug', type=int, default=0) # Debug one particular function in main flow
-	global args
-	args = parser.parse_args() # Create an object of parser
 	if args.gpu:
 		os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 		# os.environ['TENSORPACK_TRAIN_API'] = 'v2'
 	if args.sample:
-
-		sample(args.imageDir, args.maskDir, args.labelDir, args.load, args.sample)
+		sample(args.imageDir, args.maskDir, args.labelDir, args.load, args.sample, len_images)
 	else:
 		logger.auto_set_dir()
-		ds_train, ds_valid = get_data(args.imageDir, args.maskDir, args.labelDir)
+		ds_train, ds_valid = get_data(args.imageDir, args.maskDir, args.labelDir, len_images)
 
 		ds_train = PrefetchDataZMQ(ds_train, nr_proc=4)
 		ds_valid = PrefetchDataZMQ(ds_valid, nr_proc=4)
@@ -319,14 +306,10 @@ def main():
 			callbacks=[
 				PeriodicTrigger(ModelSaver(), every_k_epochs=20),
 				PeriodicTrigger(MaxSaver('validation_PSNR_recon'), every_k_epochs=20),
-				PeriodicTrigger(MaxSaver('validation_PSNR_boost'), every_k_epochs=20),
 				VisualizeRunner(),
 				InferenceRunner(ds_valid, [
 										   ScalarStats('PSNR_recon'),
-										   ScalarStats('PSNR_boost'), 
-
-										   ScalarStats('losses/Img/Recon/recon_img_AA'),
-										   ScalarStats('losses/Img/Boost/recon_img_Aa'),
+										   ScalarStats('losses/Img/Recon/smoothness_AA'),
 					]),
 				ClipCallback(),
 				ScheduledHyperParamSetter('learning_rate', 
@@ -335,6 +318,6 @@ def main():
 				],
 			session_init=SaverRestore(args.load) if args.load else None, 
 			steps_per_epoch=ds_train.size(),
-			max_epoch=500
+			max_epoch=100
 		)
 

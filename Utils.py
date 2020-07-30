@@ -204,7 +204,36 @@ def update(recon, image, mask, name='update'):
 		updated = FhRh(k_return, tf.ones_like(mask), name=name)
 	return tf.identity(updated, name=name)
 
+##############################################################################
+def background_diff(image, label, name='compare_background'):
+	"""
+	Compares the backgrounds of image and label, returning the difference between
+	the sum of their pixel values.
+	"""
+	with tf.variable_scope(name):
+		zeros = tf.zeros_like(image)
+		image_background = tf.where(label < 10, image, zeros)
+		label_background = tf.where(label < 10, label, zeros)
+		
+		diff = abs(tf.reduce_mean(image_background - label_background)) 
+	
+	return diff
+		
 
+##############################################################################
+def signal_diff(image, label, name='compare_signal'):
+	"""
+	Compares the signals (brain regions) of image and label, returning the difference between
+	the sum of their pixel values.
+	"""
+	with tf.variable_scope(name):
+		zeros = tf.zeros_like(image)
+		image_signal = tf.where(label > 10, image, zeros)
+		label_signal = tf.where(label > 10, label, zeros)
+		
+		diff = abs(tf.reduce_mean(image_signal - label_signal))
+	
+	return diff
 ###############################################################################
 # FusionNet
 @layer_register(log_shape=True)
@@ -409,6 +438,7 @@ class ImageDataFlow(RNGDataFlow):
 	def get_data(self, shuffle=True):
 		# self.reset_state()
 		images = glob.glob(self.imageDir + '/*.*')
+		print('len of images: ', len(images))
 		# print "images: ", images
 		if self.maskDir:
 			masks  = glob.glob(self.maskDir + '/*.*')
