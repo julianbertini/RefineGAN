@@ -209,29 +209,35 @@ def background_diff(image, label, name='compare_background'):
 	"""
 	Compares the backgrounds of image and label, returning the difference between
 	the sum of their pixel values.
+	
+	MSE Error
 	"""
 	with tf.variable_scope(name):
-		zeros = tf.zeros_like(image)
+		zeros = tf.zeros_like(image, dtype=tf.float32)
 		image_background = tf.where(label < 10, image, zeros)
 		label_background = tf.where(label < 10, label, zeros)
 		
-		diff = abs(tf.reduce_mean(image_background - label_background)) 
+		diff = tf.multiply(tf.cast((1/tf.size(image_background)),dtype=tf.float32), tf.reduce_sum(tf.square(image_background - label_background)))
 	
 	return diff
 		
+
+##############################################################################
 
 ##############################################################################
 def signal_diff(image, label, name='compare_signal'):
 	"""
 	Compares the signals (brain regions) of image and label, returning the difference between
 	the sum of their pixel values.
+	
+	MSE error
 	"""
 	with tf.variable_scope(name):
-		zeros = tf.zeros_like(image)
+		zeros = tf.zeros_like(image, dtype=tf.float32)
 		image_signal = tf.where(label > 10, image, zeros)
 		label_signal = tf.where(label > 10, label, zeros)
 		
-		diff = abs(tf.reduce_mean(image_signal - label_signal))
+		diff = tf.multiply(tf.cast((1/tf.size(image_signal)),dtype=tf.float32), tf.reduce_sum(tf.square(image_signal - label_signal)))
 	
 	return diff
 ###############################################################################
@@ -438,7 +444,6 @@ class ImageDataFlow(RNGDataFlow):
 	def get_data(self, shuffle=True):
 		# self.reset_state()
 		images = glob.glob(self.imageDir + '/*.*')
-		print('len of images: ', len(images))
 		# print "images: ", images
 		if self.maskDir:
 			masks  = glob.glob(self.maskDir + '/*.*')

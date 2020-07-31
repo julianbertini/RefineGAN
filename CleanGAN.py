@@ -113,7 +113,7 @@ class Model(GANModelDesc):
 		
 						
 		DELTA = 1e-4
-		ALPHA = 1e+1
+		ALPHA = 1e+2
 		RATES = tf.count_nonzero(tf.ones_like(R), dtype=tf.float32) / 2 / tf.count_nonzero(R, dtype=tf.float32) 
 		self.g_loss = tf.add_n([
 								(G_loss_AA),
@@ -138,7 +138,8 @@ class Model(GANModelDesc):
 		add_moving_summary(self.d_loss, self.g_loss)
 		add_moving_summary(
 			smoothness_AA,
-			background_diff_AA
+			background_diff_AA,
+			signal_diff_AA
 			)
 
 		psnr(tf_complex(cvt2imag(updated_image1)), tf_complex(cvt2imag(label)), maxp=255, name='PSNR_recon')
